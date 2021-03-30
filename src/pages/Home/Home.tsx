@@ -41,7 +41,9 @@ export const Home: React.FC = () => {
         const video = streamVideoEl.current;
         if (video) {
             video.srcObject = stream
-            video.src = window.URL.createObjectURL(stream);
+            try {
+                video.src = window?.URL?.createObjectURL(stream);
+            } catch (error) { console.log(error) }
             video.onloadedmetadata = function () {
                 video.play();
             };
