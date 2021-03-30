@@ -98,7 +98,7 @@ export const Home: React.FC = () => {
             });
 
             setCameraTrack(null)
-            if (buffer) {
+            if (buffer.length) {
                 mediaRecoder.stop();
                 setMediaRecoder(null)
             }
@@ -160,7 +160,7 @@ export const Home: React.FC = () => {
             console.log('创建(window as any).MediaRecorder失败!');
         }
     }
-    const handleDownloadStream = () => {        
+    const handleDownloadStream = () => {
         var blob = new Blob(buffer, { type: 'video/webm' });
         // 根据缓存数据生成url
         var url = window.URL.createObjectURL(blob);
