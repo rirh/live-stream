@@ -1,7 +1,6 @@
 import React from 'react';
 import { Button, Typography } from '@material-ui/core'
 import { createStyles, makeStyles, Theme } from '@material-ui/core/styles';
-
 import DefaultLayout from 'src/layout/DefaultLayout'
 
 const useStyles = makeStyles((theme: Theme) =>
@@ -22,6 +21,7 @@ const useStyles = makeStyles((theme: Theme) =>
     }),
 );
 
+const MultiStreamsMixer: any = require('multistreamsmixer');
 
 export const Home: React.FC = () => {
     const classes = useStyles()
@@ -29,11 +29,13 @@ export const Home: React.FC = () => {
     // const [isPlay, setIsPlay] = React.useState(false);
     const streamVideoEl = React.useRef(null)
     const [cameraTrack, setCameraTrack] = React.useState<any>(null);
+    const [buffer, setBuffer] = React.useState<any>([]);
+    const [mediaRecoder, setMediaRecoder] = React.useState<any>(null);
 
     const handleMultipleCamera = async () => {
+        handleStopCompixVideo()
         try {
             const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true })
-            const MultiStreamsMixer: any = require('multistreamsmixer');
             const mixer = new MultiStreamsMixer([
                 cameraStream,
                 cameraStream,
@@ -43,13 +45,18 @@ export const Home: React.FC = () => {
             mixer.frameInterval = 1;
             mixer.startDrawingFrames();
             const track = mixer.getMixedStream();
-            setCameraTrack(track)
+            setCameraTrack([
+                track,
+                cameraStream,
+                cameraStream,
+                cameraStream,
+                cameraStream,])
             const video: any = streamVideoEl.current;
             if ("srcObject" in video) {
                 video.srcObject = mixer.getMixedStream();
             } else {
                 //避免在新的浏览器中使用它，因为它正在被弃用。
-                video.src = window.URL.createObjectURL(mixer.getMixedStream());
+                video.src = (window as any).URL.createObjectURL(mixer.getMixedStream());
             }
             video.onloadedmetadata = function () {
                 video.play();
@@ -59,17 +66,16 @@ export const Home: React.FC = () => {
         }
     }
 
-
-
     const handleCompixVideo = () => {
+        handleStopCompixVideo()
         navigator.mediaDevices.getUserMedia({ video: true }).then(cameraStream => {
-            setCameraTrack(cameraStream)
+            setCameraTrack([cameraStream])
             const video: any = streamVideoEl.current;
             if ("srcObject" in video) {
                 video.srcObject = cameraStream;
             } else {
                 //避免在新的浏览器中使用它，因为它正在被弃用。
-                video.src = window.URL.createObjectURL(cameraStream);
+                video.src = (window as any).URL.createObjectURL(cameraStream);
             }
             video.onloadedmetadata = function () {
                 video.play();
@@ -78,76 +84,152 @@ export const Home: React.FC = () => {
     }
     const handleStopCompixVideo = () => {
         if (cameraTrack) {
-            const Tracks = cameraTrack.getTracks()
-            if (Array.isArray(Tracks)) {
-                Tracks.forEach(track => {
-                    track.stop()
-                })
-            } else {
-                Tracks.stop()
-            }
+            cameraTrack.forEach((element: any) => {
+                const Tracks = element.getTracks()
+
+                if (Array.isArray(Tracks)) {
+                    Tracks.forEach(track => {
+
+                        track.stop()
+                    })
+                } else {
+                    Tracks.stop()
+                }
+            });
+
             setCameraTrack(null)
+            if (buffer) {
+                mediaRecoder.stop();
+                setMediaRecoder(null)
+            }
         }
     }
-    const handleOpenAudio = async () => {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: false
-        });
-        const mimeType = 'audio/webm';
-        let chunks: any = [];
-        if ('MediaRecorder' in window) {
-            const recorder = new (window as any).MediaRecorder(stream, { type: mimeType });
-            recorder.addEventListener('dataavailable', (event: any) => {
-                if (typeof event.data === 'undefined') return;
-                if (event.data.size === 0) return;
-                chunks.push(event.data);
-            });
-            // recorder.addEventListener('stop', () => {
-            //     const recording = new Blob(chunks, {
-            //         type: mimeType
-            //     });
-            //     // renderRecording(recording, list);
-            //     chunks = [];
-            // });
+
+    const handleGetMixedCameraAndScreen = async () => {
+        handleStopCompixVideo()
+        let screenStream;
+        try {
+            if ((navigator as any).getDisplayMedia) {
+                screenStream = await (navigator as any)?.getDisplayMedia({ video: true })
+            } else if ((navigator as any).mediaDevices?.getDisplayMedia) {
+                screenStream = await (navigator as any).mediaDevices?.getDisplayMedia({ video: true })
+            } else {
+                alert("getDisplayMedia API is not supported by this browser.");
+            }
+            const cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+            })
+            const mixer = new MultiStreamsMixer([screenStream, cameraStream]);
+            mixer.frameInterval = 1;
+            mixer.startDrawingFrames();
+            const track = mixer.getMixedStream();
+            setCameraTrack([track, cameraStream])
+            const video: any = streamVideoEl.current;
+            if ("srcObject" in video) {
+                video.srcObject = mixer.getMixedStream();
+            } else {
+                //避免在新的浏览器中使用它，因为它正在被弃用。
+                video.src = (window as any).URL.createObjectURL(mixer.getMixedStream());
+            }
+            video.onloadedmetadata = function () {
+                video.play();
+            };
+        } catch (error) {
+            alert(error)
         }
 
+    }
+    const handleReadingStream = (mediaStream: any) => {
+        var options = { mimeType: 'video/webm;codecs=vp8' };
+        if (!(window as any).MediaRecorder.isTypeSupported(options.mimeType)) {
+            console.log('不支持' + options.mimeType);
+            return;
+        }
 
+        try {
+            const mediaRecoder = new (window as any).MediaRecorder(mediaStream, options);
+            setMediaRecoder(mediaRecoder)
+            mediaRecoder.ondataavailable = (event: any) => {
+                if (event?.data?.size > 0) {
+                    setBuffer([...buffer, event.data])
+                }
+            };
+            // 开始录制，设置录制时间片为10ms(每10s触发一次ondataavilable事件)
+            mediaRecoder.start(10);
+        } catch (e) {
+            console.log('创建(window as any).MediaRecorder失败!');
+        }
+    }
+    const handleDownloadStream = () => {        
+        var blob = new Blob(buffer, { type: 'video/webm' });
+        // 根据缓存数据生成url
+        var url = window.URL.createObjectURL(blob);
+        // 创建一个a标签，通过a标签指向url来下载
+        var a = document.createElement('a');
+        a.href = url;
+        a.style.display = 'none'; // 不显示a标签
+        a.download = 'demo.webm'; // 下载的文件名
+        a.click(); // 调用a标签的点击事件进行下载
+        setBuffer([])
+    }
+
+    const handleOpenAudio = async () => {
+        handleStopCompixVideo()
+        const microphoneStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+        });
+        const cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+        })
+        const mixer = new MultiStreamsMixer([microphoneStream, cameraStream]);
+        mixer.frameInterval = 1;
+        mixer.startDrawingFrames();
+        const track = mixer.getMixedStream();
+        setCameraTrack([track, cameraStream, microphoneStream])
+        handleReadingStream(track)
+        const video: any = streamVideoEl.current;
+        if ("srcObject" in video) {
+            video.srcObject = mixer.getMixedStream();
+        } else {
+            //避免在新的浏览器中使用它，因为它正在被弃用。
+            video.src = (window as any).URL.createObjectURL(mixer.getMixedStream());
+        }
+        video.onloadedmetadata = function () {
+            video.play();
+        };
     }
 
 
     return <DefaultLayout>
-        <Typography style={{ fontWeight: 'bold' }} variant="h3">Welcome to Recording Demo!</Typography>
+        <Typography style={{ fontWeight: 'bold' }} variant="h3">Welcome To Demo!</Typography>
         <br />
         <div className={classes.contr}>
+            <Button style={{ margin: '10px' }} onClick={handleCompixVideo} variant="contained">
+                Open camera
+            </Button>
             <Button style={{ margin: '10px' }} onClick={handleMultipleCamera} variant="contained">
                 Open Multiple camera
             </Button>
-            <Button style={{ margin: '10px' }} onClick={handleCompixVideo} variant="contained">
-                Open camera
+            <Button style={{ margin: '10px' }} onClick={handleGetMixedCameraAndScreen} variant="contained">
+                Open Mixed Camera And Screen
+            </Button>
+            <Button style={{ margin: '10px' }} onClick={handleOpenAudio} variant="contained">
+                Open Mixed recording Audio And Screen
             </Button>
             <Button style={{ margin: '10px' }} onClick={handleStopCompixVideo} variant="contained">
                 Close camera
             </Button>
-            <Button style={{ margin: '10px' }} onClick={handleOpenAudio} variant="contained">
-                recording Audio
-            </Button>
-            <Button style={{ margin: '10px' }} variant="contained">
-                Download recording
-            </Button>
-            <Button style={{ margin: '10px' }} variant="contained">
-                Download Audio Video and recording
-            </Button>
+            {
+                buffer.length ? <Button style={{ margin: '10px' }} onClick={handleDownloadStream} variant="contained">
+                    Download Audio Video and recording
+                </Button> : null
+            }
+
         </div>
         <div>
             {cameraTrack ? <div>
                 <video ref={streamVideoEl} autoPlay loop></video>
             </div> : null}
-            <div className={classes.root}>
-                <video src={process.env.REACT_APP_VIDEO_1_SRC} muted autoPlay loop></video>
-                <video src={process.env.REACT_APP_VIDEO_2_SRC} muted autoPlay loop></video>
-            </div>
-
         </div>
 
 
