@@ -1,0 +1,103 @@
+
+
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <meta
+      name="viewport"
+      content="initial-scale=1.0, width=device-width"
+      key="viewport"
+    />
+    <link
+      rel="stylesheet"
+      href="//fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic"
+    />
+    <link
+      rel="stylesheet"
+      href="//cdnjs.cloudflare.com/ajax/libs/normalize/5.0.0/normalize.css"
+    />    
+    <title>Recording</title>
+    <style>
+        video {
+            max-height: 70px;
+        }
+    </style>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    
+ </head>
+ <body>
+    <div className="row"></div>
+
+    <video id="video0" controls width="360px" height="auto" muted></video>
+ 
+        <video id="video1" controls width="360px" height="auto" muted></video>
+        <video id="video2" width="360px" loop autoplay muted src="/spring-vp9-vorbis.webm"></video>
+        <video id="video3" width="360px" loop autoplay muted src="/arg.webm"></video>
+        <video id="video4" width="360px" loop autoplay src="/BBBunny.vp8.720p.webm"></video>
+     
+    
+    
+      <audio id="fakeAudio" controls loop >
+            <source src="/piano.ogg" type="audio/ogg; codecs=opus" />
+        </audio> 
+    </div>
+    <div className="row">
+        <canvas id="output" ></canvas>
+    </div>
+
+    <script>
+        var constraints = { audio: true, video: true };
+        var recordedChunks = [];
+        let mediaRecorder;
+
+        function download() {
+            var currDate = new Date()
+            var blob = new Blob(recordedChunks, {
+                type: "video/webm"
+            });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement("a");
+            document.body.appendChild(a);
+            a.style = "display: none";
+            a.href = url;
+            a.download = `test_${currDate.getMinutes()}_${currDate.getSeconds()}.webm`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+            // demo: to download after 9sec
+        setTimeout(event => {
+            console.log("stopping");
+            mediaRecorder.stop();
+            download();
+        }, 9000);
+
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(function(stream) {
+                var options = {
+                    audioBitsPerSecond: 128000,
+                    videoBitsPerSecond: 2500000,
+                    mimeType: 'video/webm; codecs="vp8, opus"'
+                }
+                mediaRecorder = new MediaRecorder(stream,options);
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                        console.log(event.timecode);     
+                    } else {
+                        console.error("Whaaaat")
+                    }
+                }
+                mediaRecorder.start(1000);
+
+            })
+            .catch(function(error) {
+                console.log(error.message);
+            });
+    </script>
+    
+</body>
+</html>
+
+  
