@@ -29,7 +29,7 @@ export const Home: React.FC = () => {
     // const [isPlay, setIsPlay] = React.useState(false);
     const streamVideoEl = React.useRef(null)
     const [cameraTrack, setCameraTrack] = React.useState<any>(null);
-    let buffer: any = []
+    const [buffer, setBuffer] = React.useState<any>([]);
     const [mediaRecoder, setMediaRecoder] = React.useState<any>(null);
 
     const handleMultipleCamera = async () => {
@@ -150,9 +150,7 @@ export const Home: React.FC = () => {
             setMediaRecoder(mediaRecoder)
             mediaRecoder.ondataavailable = (event: any) => {
                 if (event?.data?.size > 0) {
-                    buffer.push(event.data)
-                    console.log(buffer)
-
+                    setBuffer([...buffer, event.data])
                 }
             };
             // 开始录制，设置录制时间片为10ms(每10s触发一次ondataavilable事件)
@@ -162,16 +160,18 @@ export const Home: React.FC = () => {
         }
     }
     const handleDownloadStream = () => {
-        var blob = new Blob(buffer, { type: 'video/webm' });
+        console.log(buffer)
+        
+        var blob = new Blob(buffer);
         // 根据缓存数据生成url
         var url = window.URL.createObjectURL(blob);
         // 创建一个a标签，通过a标签指向url来下载
         var a = document.createElement('a');
         a.href = url;
         a.style.display = 'none'; // 不显示a标签
-        a.download = 'demo.webm'; // 下载的文件名
+        a.download = 'demo.mp4'; // 下载的文件名
         a.click(); // 调用a标签的点击事件进行下载
-        buffer = []
+        setBuffer([])
     }
 
     const handleOpenAudio = async () => {
