@@ -10,8 +10,13 @@ const useStyles = makeStyles((theme: Theme) =>
             "& video": {
                 height: '50vh',
                 margin: theme.spacing(2)
-
             },
+        },
+        title: {
+            fontWeight: 'bold'
+        },
+        btn: {
+            margin: '10px'
         },
         contr: {
             "& .MuiButton-label": {
@@ -27,13 +32,24 @@ export const Home: React.FC = () => {
     const classes = useStyles()
 
     // const [isPlay, setIsPlay] = React.useState(false);
-    const streamVideoEl = React.useRef(null)
-    const [cameraTrack, setCameraTrack] = React.useState<any>(null);
-    const [buffer, setBuffer] = React.useState<any>([]);
-    const [mediaRecoder, setMediaRecoder] = React.useState<any>(null);
+    const streamVideoEl = React.useRef<HTMLVideoElement>(null)
+    const [cameraTrack, setCameraTrack] = React.useState<MediaStream[]>([]);
+    const [buffer, setBuffer] = React.useState<Buffer[]>([]);
+    const [mediaRecoder, setMediaRecoder] = React.useState<any>();
+
+    const setVideoSteram = (stream: MediaStream) => {
+        const video = streamVideoEl.current;
+        if (video) {
+            video.srcObject = stream
+            video.src = window.URL.createObjectURL(stream);
+            video.onloadedmetadata = function () {
+                video.play();
+            };
+        }
+    }
 
     const handleMultipleCamera = async () => {
-        handleStopCompixVideo()
+        handleCloseAllStream()
         try {
             const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true })
             const mixer = new MultiStreamsMixer([
@@ -44,75 +60,65 @@ export const Home: React.FC = () => {
             ]);
             mixer.frameInterval = 1;
             mixer.startDrawingFrames();
-            const track = mixer.getMixedStream();
+            const mixedStream = mixer.getMixedStream();
             setCameraTrack([
-                track,
+                mixedStream,
                 cameraStream,
                 cameraStream,
                 cameraStream,
                 cameraStream,])
-            const video: any = streamVideoEl.current;
-            if ("srcObject" in video) {
-                video.srcObject = mixer.getMixedStream();
-            } else {
-                //避免在新的浏览器中使用它，因为它正在被弃用。
-                video.src = (window as any).URL.createObjectURL(mixer.getMixedStream());
-            }
-            video.onloadedmetadata = function () {
-                video.play();
-            };
+            setVideoSteram(mixedStream)
+
         } catch (error) {
             alert(error)
         }
     }
 
     const handleCompixVideo = () => {
-        handleStopCompixVideo()
+        handleCloseAllStream()
         navigator.mediaDevices.getUserMedia({ video: true }).then(cameraStream => {
             setCameraTrack([cameraStream])
-            const video: any = streamVideoEl.current;
-            if ("srcObject" in video) {
-                video.srcObject = cameraStream;
-            } else {
-                //避免在新的浏览器中使用它，因为它正在被弃用。
-                video.src = (window as any).URL.createObjectURL(cameraStream);
-            }
-            video.onloadedmetadata = function () {
-                video.play();
-            };
+            setVideoSteram(cameraStream)
         })
     }
-    const handleStopCompixVideo = () => {
-        if (cameraTrack) {
-            cameraTrack.forEach((element: any) => {
-                const Tracks = element.getTracks()
 
-                if (Array.isArray(Tracks)) {
-                    Tracks.forEach(track => {
-
-                        track.stop()
-                    })
-                } else {
-                    Tracks.stop()
-                }
-            });
-
-            setCameraTrack(null)
-            if (buffer.length) {
-                mediaRecoder.stop();
-                setMediaRecoder(null)
-            }
+    const stopRecoder = () => {
+        if (buffer.length) {
+            mediaRecoder.stop();
+            setMediaRecoder(null)
         }
     }
 
-    const handleGetMixedCameraAndScreen = async () => {
-        handleStopCompixVideo()
+    const handleCloseAllStream = () => {
+        if (cameraTrack) {
+            cameraTrack.forEach((element) => {
+                const Tracks = element.getTracks()
+                if (Array.isArray(Tracks)) {
+                    Tracks.forEach(track => {
+                        track.stop()
+                    })
+                } else {
+                    (Tracks as MediaStreamTrack).stop()
+                }
+            });
+            setCameraTrack([])
+            stopRecoder()
+        }
+    }
+
+
+    const handleMixedCameraAndScreen = async () => {
+        handleCloseAllStream()
         let screenStream;
         try {
-            if ((navigator as any).getDisplayMedia) {
-                screenStream = await (navigator as any)?.getDisplayMedia({ video: true })
-            } else if ((navigator as any).mediaDevices?.getDisplayMedia) {
-                screenStream = await (navigator as any).mediaDevices?.getDisplayMedia({ video: true })
+            //@ts-ignore
+            if (navigator.getDisplayMedia) {
+                //@ts-ignore
+                screenStream = await navigator?.getDisplayMedia({ video: true })
+                //@ts-ignore
+            } else if (navigator.mediaDevices?.getDisplayMedia) {
+                //@ts-ignore
+                screenStream = await navigator.mediaDevices?.getDisplayMedia({ video: true })
             } else {
                 alert("getDisplayMedia API is not supported by this browser.");
             }
@@ -122,18 +128,9 @@ export const Home: React.FC = () => {
             const mixer = new MultiStreamsMixer([screenStream, cameraStream]);
             mixer.frameInterval = 1;
             mixer.startDrawingFrames();
-            const track = mixer.getMixedStream();
-            setCameraTrack([track, cameraStream])
-            const video: any = streamVideoEl.current;
-            if ("srcObject" in video) {
-                video.srcObject = mixer.getMixedStream();
-            } else {
-                //避免在新的浏览器中使用它，因为它正在被弃用。
-                video.src = (window as any).URL.createObjectURL(mixer.getMixedStream());
-            }
-            video.onloadedmetadata = function () {
-                video.play();
-            };
+            const mixedStream = mixer.getMixedStream();
+            setCameraTrack([mixedStream, cameraStream])
+            setVideoSteram(mixedStream)
         } catch (error) {
             alert(error)
         }
@@ -141,12 +138,13 @@ export const Home: React.FC = () => {
     }
     const handleReadingStream = (mediaStream: any) => {
         var options = { mimeType: 'video/webm;codecs=vp8' };
-        if (!(window as any).MediaRecorder.isTypeSupported(options.mimeType)) {
-            console.log('不支持' + options.mimeType);
-            return;
+        // @ts-ignore
+        if (!window.MediaRecorder.isTypeSupported(options.mimeType)) {
+            console.log('Not support' + options.mimeType);
         }
         try {
-            const mediaRecoder = new (window as any).MediaRecorder(mediaStream, options);
+            // @ts-ignore
+            const mediaRecoder = new window.MediaRecorder(mediaStream, options);
             setMediaRecoder(mediaRecoder)
             mediaRecoder.ondataavailable = (event: any) => {
                 if (event?.data?.size > 0) {
@@ -156,12 +154,12 @@ export const Home: React.FC = () => {
             // 开始录制，设置录制时间片为10ms(每10s触发一次ondataavilable事件)
             mediaRecoder.start(10);
         } catch (e) {
-            console.log('创建(window as any).MediaRecorder失败!');
+            console.log('Create MediaRecorder faild!');
         }
     }
     const handleDownloadStream = () => {
         console.log(buffer)
-        
+
         var blob = new Blob(buffer);
         // 根据缓存数据生成url
         var url = window.URL.createObjectURL(blob);
@@ -174,55 +172,48 @@ export const Home: React.FC = () => {
         setBuffer([])
     }
 
-    const handleOpenAudio = async () => {
-        handleStopCompixVideo()
+    const handleMixedCameraAndAudio = async () => {
+        handleCloseAllStream()
         const microphoneStream = await navigator.mediaDevices.getUserMedia({
             audio: true,
             video: true,
         });
+        // Another: mixed one audio stream and video stream 
         // const cameraStream = await navigator.mediaDevices.getUserMedia({
         //     video: true,
         // })
         const mixer = new MultiStreamsMixer([microphoneStream]);
         mixer.frameInterval = 1;
         mixer.startDrawingFrames();
-        const track = mixer.getMixedStream();
-        setCameraTrack([track, microphoneStream])
+        const mixedStream = mixer.getMixedStream();
+        setCameraTrack([mixedStream, microphoneStream])
         handleReadingStream(microphoneStream)
-        const video: any = streamVideoEl.current;
-        if ("srcObject" in video) {
-            video.srcObject = mixer.getMixedStream();
-        } else {
-            //避免在新的浏览器中使用它，因为它正在被弃用。
-            video.src = (window as any).URL.createObjectURL(mixer.getMixedStream());
-        }
-        video.onloadedmetadata = function () {
-            video.play();
-        };
+        setVideoSteram(mixedStream)
+
     }
 
 
     return <DefaultLayout>
-        <Typography style={{ fontWeight: 'bold' }} variant="h3">Welcome To Demo!</Typography>
+        <Typography className={classes.title} variant="h3">Welcome To Demo!</Typography>
         <br />
         <div className={classes.contr}>
-            <Button style={{ margin: '10px' }} onClick={handleCompixVideo} variant="contained">
+            <Button className={classes.btn} onClick={handleCompixVideo} variant="contained">
                 Open camera
             </Button>
-            <Button style={{ margin: '10px' }} onClick={handleMultipleCamera} variant="contained">
+            <Button className={classes.btn} onClick={handleMultipleCamera} variant="contained">
                 Open Multiple camera
             </Button>
-            <Button style={{ margin: '10px' }} onClick={handleGetMixedCameraAndScreen} variant="contained">
+            <Button className={classes.btn} onClick={handleMixedCameraAndScreen} variant="contained">
                 Open Mixed Camera And Screen
             </Button>
-            <Button style={{ margin: '10px' }} onClick={handleOpenAudio} variant="contained">
+            <Button className={classes.btn} onClick={handleMixedCameraAndAudio} variant="contained">
                 Open Mixed recording Audio And Screen
             </Button>
-            <Button style={{ margin: '10px' }} onClick={handleStopCompixVideo} variant="contained">
+            <Button className={classes.btn} onClick={handleCloseAllStream} variant="contained">
                 Close camera
             </Button>
             {
-                buffer.length ? <Button style={{ margin: '10px' }} onClick={handleDownloadStream} variant="contained">
+                buffer.length ? <Button className={classes.btn} onClick={handleDownloadStream} variant="contained">
                     Download Audio Video and recording
                 </Button> : null
             }
@@ -233,12 +224,7 @@ export const Home: React.FC = () => {
                 <video ref={streamVideoEl} autoPlay loop></video>
             </div> : null}
         </div>
-
-
-
-
     </DefaultLayout>
 };
-
 
 export const HOME_URL = '/'
