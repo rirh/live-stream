@@ -29,7 +29,7 @@ export const Home: React.FC = () => {
     // const [isPlay, setIsPlay] = React.useState(false);
     const streamVideoEl = React.useRef(null)
     const [cameraTrack, setCameraTrack] = React.useState<any>(null);
-    const [buffer, setBuffer] = React.useState<any>([]);
+    let buffer: any = []
     const [mediaRecoder, setMediaRecoder] = React.useState<any>(null);
 
     const handleMultipleCamera = async () => {
@@ -145,13 +145,14 @@ export const Home: React.FC = () => {
             console.log('不支持' + options.mimeType);
             return;
         }
-
         try {
             const mediaRecoder = new (window as any).MediaRecorder(mediaStream, options);
             setMediaRecoder(mediaRecoder)
             mediaRecoder.ondataavailable = (event: any) => {
                 if (event?.data?.size > 0) {
-                    setBuffer([...buffer, event.data])
+                    buffer.push(event.data)
+                    console.log(buffer)
+
                 }
             };
             // 开始录制，设置录制时间片为10ms(每10s触发一次ondataavilable事件)
@@ -170,23 +171,24 @@ export const Home: React.FC = () => {
         a.style.display = 'none'; // 不显示a标签
         a.download = 'demo.webm'; // 下载的文件名
         a.click(); // 调用a标签的点击事件进行下载
-        setBuffer([])
+        buffer = []
     }
 
     const handleOpenAudio = async () => {
         handleStopCompixVideo()
         const microphoneStream = await navigator.mediaDevices.getUserMedia({
             audio: true,
-        });
-        const cameraStream = await navigator.mediaDevices.getUserMedia({
             video: true,
-        })
-        const mixer = new MultiStreamsMixer([microphoneStream, cameraStream]);
+        });
+        // const cameraStream = await navigator.mediaDevices.getUserMedia({
+        //     video: true,
+        // })
+        const mixer = new MultiStreamsMixer([microphoneStream]);
         mixer.frameInterval = 1;
         mixer.startDrawingFrames();
         const track = mixer.getMixedStream();
-        setCameraTrack([track, cameraStream, microphoneStream])
-        handleReadingStream(track)
+        setCameraTrack([track, microphoneStream])
+        handleReadingStream(microphoneStream)
         const video: any = streamVideoEl.current;
         if ("srcObject" in video) {
             video.srcObject = mixer.getMixedStream();
